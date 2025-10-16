@@ -3,64 +3,10 @@ from torch import nn
 import torch.optim as optim
 from tqdm import tqdm
 import evaluate
+import matplotlib.pyplot as plt
+from src.eval_lstm import calculate_rouge_simple
 
 
-def calculate_rouge_simple(model, rouge_loader, tokenizer, device, num_examples=3):
-    rouge_metric = evaluate.load("rouge")
-    """Упрощенный расчет ROUGE с использованием библиотеки evaluate"""
-    model.eval()
-    
-    all_predictions = []
-    all_references = []
-    examples = []
-    
-    with torch.no_grad():
-        for i, (input_tokens, target_tokens, input_text, target_text) in enumerate(rouge_loader):
-            if i >= 50:  # Оцениваем только на 50 примерах для скорости
-                break
-                
-            # Перемещаем тензоры на правильное устройство
-            input_tokens = input_tokens.to(device)
-            
-            # Генерируем продолжение с указанием устройства
-            generated_text = model.generate(
-                tokenizer=tokenizer,
-                prompt=input_text[0],
-                max_length=min(len(target_tokens[0]) + 10, 100),  # Ограничиваем максимальную длину
-                temperature=0.8,
-                top_k=50,
-                device=device  # Добавляем параметр устройства
-            )
-            
-            all_predictions.append(generated_text)
-            all_references.append(target_text[0])
-            
-            # Сохраняем примеры для вывода
-            if len(examples) < num_examples:
-                examples.append({
-                    'input': input_text[0],
-                    'generated': generated_text,
-                    'target': target_text[0]
-                })
-    
-    # Вычисляем ROUGE с помощью библиотеки evaluate
-    results = rouge_metric.compute(
-        predictions=all_predictions, 
-        references=all_references,
-        use_stemmer=True
-    )
-    
-    # Выводим примеры
-    print("\n" + "="*80)
-    print("ПРИМЕРЫ АВТОДОПОЛНЕНИЙ:")
-    print("="*80)
-    for i, example in enumerate(examples, 1):
-        print(f"\n--- Пример {i} ---")
-        print(f"Вход (3/4 текста): {example['input'][:150]}...")
-        print(f"Сгенерировано: {example['generated']}")
-        print(f"Цель (1/4 текста): {example['target']}")
-    
-    return results
 
 def train_model_simple(model, train_loader, rouge_loader, tokenizer, epochs=10, learning_rate=0.001):
     """Упрощенная функция тренировки"""
@@ -116,7 +62,31 @@ def train_model_simple(model, train_loader, rouge_loader, tokenizer, epochs=10, 
     
     return model, train_losses, rouge_history
 
-
+def plot_training_history(train_losses, rouge_history):
+    """Визуализация результатов тренировки"""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    # График потерь
+    ax1.plot(train_losses, 'b-', linewidth=2, marker='o')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Training Loss', color='b')
+    ax1.set_title('Training Loss')
+    ax1.grid(True, alpha=0.3)
+    
+    # График ROUGE
+    epochs = range(1, len(rouge_history) + 1)
+    ax2.plot(epochs, [rs['rouge1'] for rs in rouge_history], 'r-', label='ROUGE-1', linewidth=2, marker='s')
+    ax2.plot(epochs, [rs['rouge2'] for rs in rouge_history], 'g-', label='ROUGE-2', linewidth=2, marker='s')
+    ax2.plot(epochs, [rs['rougeL'] for rs in rouge_history], 'b-', label='ROUGE-L', linewidth=2, marker='s')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('ROUGE Score')
+    ax2.set_title('ROUGE Metrics')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('training_results.png', dpi=300, bbox_inches='tight')
+    plt.show()
 
 if __name__ == '__main__':
     pass

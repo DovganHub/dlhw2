@@ -18,7 +18,7 @@ class RougeEvaluationDataset(Dataset):
         self.samples = []
         self.tokenizer = tokenizer
         
-        for text in tqdm(texts, desc="Creating ROUGE evaluation samples"):
+        for text in texts:
             if not text.strip():
                 continue
                 
