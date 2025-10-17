@@ -1,4 +1,5 @@
 ./yasp2_venv
-./data/*
+/data/*
+/models/*
 import torch.py
 distill.ipynb
