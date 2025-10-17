@@ -8,7 +8,7 @@ from src.eval_lstm import calculate_rouge_simple
 
 
 
-def train_model_simple(model, train_loader, rouge_loader, tokenizer, epochs=10, learning_rate=0.001):
+def train_model_simple(model, train_loader, rouge_loader, val_loader, tokenizer, epochs=10, learning_rate=0.001):
     """Упрощенная функция тренировки"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -19,6 +19,7 @@ def train_model_simple(model, train_loader, rouge_loader, tokenizer, epochs=10, 
     
     train_losses = []
     rouge_history = []
+    val_losses = []
     
     for epoch in range(epochs):
         # === ТРЕНИРОВКА ===
@@ -43,14 +44,29 @@ def train_model_simple(model, train_loader, rouge_loader, tokenizer, epochs=10, 
         
         avg_train_loss = total_loss / len(train_loader)
         train_losses.append(avg_train_loss)
-        
+
+        # === ВАЛИДАЦИЯ ===
+        avg_val_loss = 0
+        if val_loader is not None:
+            model.eval()
+            total_val_loss = 0
+            with torch.no_grad():
+                for inputs, targets in val_loader:
+                    inputs, targets = inputs.to(device), targets.to(device)
+                    outputs, _ = model(inputs)
+                    loss = criterion(outputs, targets)
+                    total_val_loss += loss.item()
+            
+            avg_val_loss = total_val_loss / len(val_loader)
+            val_losses.append(avg_val_loss)
+
         # === ОЦЕНКА ROUGE ===
         print(f"\nEpoch {epoch+1} - Оценка ROUGE...")
         rouge_scores = calculate_rouge_simple(model, rouge_loader, tokenizer, device)  # Передаем device
         rouge_history.append(rouge_scores)
         
         print(f"\nEpoch {epoch+1}/{epochs} Результаты:")
-        print(f"  Train Loss: {avg_train_loss:.4f}")
+        print(f"  Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
         for key, value in rouge_scores.items():
             print(f"  {key.upper()}: {value:.4f}")
         
@@ -60,17 +76,19 @@ def train_model_simple(model, train_loader, rouge_loader, tokenizer, epochs=10, 
             torch.save(model.state_dict(), f'./models/best_model_epoch_{epoch+1}.pth')
             print("  ✅ Модель сохранена!")
     
-    return model, train_losses, rouge_history
+    return model, train_losses, rouge_history, val_losses
 
-def plot_training_history(train_losses, rouge_history):
+def plot_training_history(train_losses, rouge_history, val_losses):
     """Визуализация результатов тренировки"""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
     
     # График потерь
-    ax1.plot(train_losses, 'b-', linewidth=2, marker='o')
+    ax1.plot(train_losses, 'b-', linewidth=2, marker='o', label='Train Loss')
+    ax1.plot(val_losses, 'r-', linewidth=2, marker='o', label='Val Loss')
     ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Training Loss', color='b')
-    ax1.set_title('Training Loss')
+    ax1.set_ylabel('Losses', color='b')
+    ax1.set_title('Losses')
+    ax1.legend()
     ax1.grid(True, alpha=0.3)
     
     # График ROUGE
